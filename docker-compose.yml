@@ -1,0 +1,58 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  tla-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: tla-mssql
+    hostname: tla-mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=TLA_Password123!
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - tla_mssql_data:/var/opt/mssql
+      - ./sql-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - tla-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P 'TLA_Password123!' -Q 'SELECT 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # TLA API (opsiyonel - gelecekte eklenebilir)
+  tla-api:
+    build: 
+      context: .
+      dockerfile: TLA.Api/Dockerfile
+    container_name: tla-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=tla-mssql,1433;Database=TLA_Database;User Id=SA;Password=TLA_Password123!;TrustServerCertificate=true;
+    ports:
+      - "5000:80"
+      - "5001:443"
+    depends_on:
+      tla-mssql:
+        condition: service_healthy
+    networks:
+      - tla-network
+    restart: unless-stopped
+
+volumes:
+  tla_mssql_data:
+    driver: local
+
+networks:
+  tla-network:
+    driver: bridge
+
+# Kullanım komutları:
+# docker-compose up -d                 # Servisleri başlat
+# docker-compose down                  # Servisleri durdur
+# docker-compose logs tla-mssql        # MSSQL loglarını görüntüle
+# docker-compose exec tla-mssql bash   # MSSQL container'ına bağlan
